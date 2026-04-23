@@ -1,0 +1,59 @@
+---
+description: Driveery project overview and conventions — always apply
+alwaysApply: true
+---
+
+# Driveery — NL2SQL Analytics Platform for Drivee
+
+## Project Identity
+- **Name**: Driveery (Drivee + Query)
+- **Purpose**: Self-service BI platform — manager types natural language → AI generates SQL → returns chart + table
+- **Hackathon**: MPIT III season, Specialists track, case from Drivee
+
+## Brand Colors (Drivee)
+- Primary green: `#2ECC71` / `#27AE60`
+- Dark green: `#1A7A42`
+- Background: `#F0FDF4`
+- Text dark: `#0D1117`
+- Accent orange: `#F39C12`
+- Danger red: `#E74C3C`
+- Tailwind config: `green-500=#2ECC71`, `green-700=#1A7A42`
+
+## Stack
+- **Frontend**: Vue 3 (Composition API), Pinia, Tailwind CSS, Chart.js, Vite
+- **Backend**: Python 3.11, FastAPI, SQLAlchemy 2.x, Pydantic v2, Alembic
+- **AI**: OpenRouter API, model `qwen/qwen3-plus` (supports thinking/reasoning)
+- **DB**: PostgreSQL 15
+- **DevOps**: Docker, Docker Compose
+
+## Key Features
+1. Chat interface for natural language queries
+2. AI thinking logs (show reasoning chain to user)
+3. Auto chart selection + column/table toggle
+4. SQL guardrails (block DROP/DELETE/sensitive data)
+5. Semantic layer (business terms dictionary)
+6. Saved reports + scheduling
+7. Security panel (role-based access, query audit)
+
+## AI Integration
+- OpenRouter base URL: `https://openrouter.ai/api/v1`
+- API Key: set via `OPENROUTER_API_KEY` env var
+- Model: `qwen/qwen3-plus` (use `include_reasoning: true` for thinking)
+- Always show `reasoning` field to user in UI as "thinking log"
+
+## DB Schema (PostgreSQL)
+Tables: `users`, `cities`, `drivers`, `trips`, `orders`, `saved_reports`, `query_logs`
+
+## Architecture (Clean)
+```
+api/v1/          → HTTP layer (routers, request/response schemas)
+application/     → Use cases / services (business logic)
+domain/          → Entities, value objects, domain exceptions
+infrastructure/  → DB models, repositories, external API clients
+```
+
+## Never Do
+- Never put business logic in routers
+- Never expose raw SQL errors to frontend
+- Never skip guardrail check before executing AI-generated SQL
+- Never commit `.env` with real secrets

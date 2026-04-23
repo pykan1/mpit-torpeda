@@ -1,0 +1,42 @@
+---
+description: Vue 3 + Tailwind standards for Driveery frontend
+globs: frontend/src/**/*.{vue,js,ts}
+alwaysApply: false
+---
+
+# Frontend Standards
+
+## Vue 3 Patterns
+- Always use `<script setup>` Composition API
+- Use Pinia stores for global state (query, reports, auth)
+- Use `composables/` for reusable logic (useChart, useQuery)
+
+## Drivee Brand Colors in Tailwind
+- Primary: `green-500` (#2ECC71), `green-700` (#1A7A42)
+- Background: `green-50` (#F0FDF4)
+- Text: `gray-900`
+- Danger: `red-500`
+- Warning: `yellow-500`
+- Use gradient: `from-green-600 to-green-400`
+
+## Key Components
+- `ChatInterface.vue` — main query input + response area
+- `ThinkingLog.vue` — expandable AI reasoning panel (always visible)
+- `ChartRenderer.vue` — Chart.js with auto chart type selection
+- `DataTable.vue` — sortable table with column toggle
+- `SecurityPanel.vue` — guardrail status, role display
+
+## Chart Auto-Selection Logic
+- Time series data → Line chart
+- Category comparisons → Bar chart  
+- Part-of-whole → Pie/Doughnut chart
+- Single metric → KPI card
+- Always offer toggle between chart ↔ table view
+
+## ThinkingLog Display
+- Show AI reasoning in collapsible panel below query
+- Style with `border-l-4 border-yellow-400 bg-yellow-50 text-xs font-mono`
+- Label: "🤔 Как я понял запрос" / "🧠 Размышления ИИ"
+
+## API Base URL
+- Use `VITE_API_URL` env var, default `http://localhost:8000`
