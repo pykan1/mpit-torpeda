@@ -1,9 +1,9 @@
 <template>
   <div class="w-full">
     <!-- Chart type selector -->
-    <div class="flex items-center gap-2 mb-4">
+    <div class="flex items-center gap-2 mb-4 flex-wrap">
       <span class="text-sm font-medium text-gray-500">Тип визуализации:</span>
-      <div class="flex gap-1">
+      <div class="flex gap-1 flex-wrap">
         <button
           v-for="type in availableTypes"
           :key="type.value"
@@ -95,6 +95,11 @@ const showTable = ref(false)
 let chartInstance = null
 
 const availableTypes = computed(() => {
+  const isTableOnly = props.chartType === 'table' || !props.chartData || Object.keys(props.chartData).length === 0
+  if (isTableOnly) {
+    return [{ value: 'table', label: '📋 Таблица' }]
+  }
+
   const types = [
     { value: 'bar', label: '📊 Столбцы' },
     { value: 'line', label: '📈 График' },
@@ -198,6 +203,12 @@ async function renderChart() {
 
 watch(() => selectedType.value, renderChart)
 watch(() => props.chartData, renderChart, { deep: true })
+watch(
+  () => props.chartType,
+  (nextType) => {
+    selectedType.value = nextType || 'table'
+  }
+)
 
 onMounted(renderChart)
 onUnmounted(destroyChart)

@@ -31,6 +31,7 @@ class NLQueryResponse(BaseModel):
     result: QueryResultOut | None
     confidence: float
     query_log_id: int | None
+    is_fallback: bool = False
 
 
 class SaveReportRequest(BaseModel):

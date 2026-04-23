@@ -1,5 +1,6 @@
 import httpx
 import json
+from typing import AsyncIterator
 from app.config import settings
 from app.domain.exceptions import AIServiceError
 
@@ -108,49 +109,57 @@ SEMANTIC_LAYER = {
 
 def build_system_prompt() -> str:
     semantic_str = "\n".join(f"  - '{k}' → {v}" for k, v in SEMANTIC_LAYER.items())
-    return f"""You are Driveery — an intelligent SQL generator for Drivee ride-sharing analytics.
+    return f"""Ты Driveery — интеллектуальный генератор SQL для аналитики сервиса Drivee.
 
 {DB_SCHEMA_DESCRIPTION}
 
-SEMANTIC LAYER (business terms dictionary):
+СЕМАНТИЧЕСКИЙ СЛОЙ (словарь бизнес-терминов):
 {semantic_str}
 
-RULES:
-1. Generate ONLY SELECT queries. Never use DROP, DELETE, UPDATE, INSERT, ALTER, TRUNCATE.
-2. Never select sensitive columns: password, token, secret.
-3. Always add LIMIT 1000 unless aggregating.
-4. Use the semantic layer when the user mentions business terms.
-5. Always use proper JOINs based on FK relationships.
-6. For time filters: use NOW(), CURRENT_DATE, INTERVAL.
+ПРАВИЛА:
+1. Генерируй ТОЛЬКО SELECT-запросы. Никогда не используй DROP, DELETE, UPDATE, INSERT, ALTER, TRUNCATE.
+2. Никогда не выбирай чувствительные колонки: password, token, secret.
+3. Всегда добавляй LIMIT 1000, если это не агрегирующий запрос.
+4. Используй семантический слой, когда пользователь упоминает бизнес-термины.
+5. Всегда используй корректные JOIN по FK-связям.
+6. Для фильтров по времени используй NOW(), CURRENT_DATE, INTERVAL.
 7. "прошлая неделя" = WHERE started_at >= NOW() - INTERVAL '14 days' AND started_at < NOW() - INTERVAL '7 days'
 8. "эта неделя" = WHERE started_at >= NOW() - INTERVAL '7 days'
 9. "вчера" = WHERE DATE(started_at) = CURRENT_DATE - 1
 
-RESPOND IN THIS EXACT JSON FORMAT:
+ОТВЕЧАЙ СТРОГО В ТАКОМ JSON-ФОРМАТЕ:
 {{
-  "interpretation": "Human-readable explanation of how you understood the query in Russian",
+  "interpretation": "Пояснение на русском, как ты понял запрос",
   "sql": "SELECT ... FROM ... WHERE ... ORDER BY ... LIMIT ...",
   "chart_type": "bar|line|pie|doughnut|table|kpi",
   "confidence": 0.0-1.0,
   "chart_config": {{
-    "x_column": "column name for X axis",
-    "y_column": "column name for Y axis",
-    "label_column": "column name for labels (optional)"
+    "x_column": "имя колонки для оси X",
+    "y_column": "имя колонки для оси Y",
+    "label_column": "имя колонки для labels (опционально)"
   }}
 }}
 
-Think step by step before answering."""
+ВАЖНО ДЛЯ REASONING (ОБЯЗАТЕЛЬНО):
+- Пиши reasoning/think строго на русском языке.
+- Запрещено использовать английские фразы, кроме SQL-ключевых слов, названий таблиц/колонок и технических токенов SQL.
+- Никогда не пиши служебные заголовки и мета-текст: "CHAIN OF THOUGHT", "Here is my thinking", "[Done]", "Final check" и т.п.
+- Не дублируй и не повторяй один и тот же шаг разными формулировками.
+- Не выводи markdown-блоки в reasoning.
+- В content верни только валидный JSON, без дополнительного текста.
+"""
 
 
-async def generate_sql(natural_query: str) -> dict:
-    """Call OpenRouter API with thinking enabled and return parsed response."""
-    headers = {
+def _build_headers() -> dict[str, str]:
+    return {
         "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
         "HTTP-Referer": "https://driveery.app",
         "X-Title": "Driveery NL2SQL",
     }
 
+
+def _build_payload(natural_query: str, stream: bool = False) -> dict:
     payload = {
         "model": settings.OPENROUTER_MODEL,
         "messages": [
@@ -160,6 +169,34 @@ async def generate_sql(natural_query: str) -> dict:
         "temperature": 0.1,
         "include_reasoning": True,
     }
+    if stream:
+        payload["stream"] = True
+    return payload
+
+
+def _parse_ai_content(raw_content: str) -> dict:
+    # Parse JSON from content (may be wrapped in ```json ... ```)
+    content = raw_content.strip()
+    if content.startswith("```"):
+        lines = content.split("\n")
+        content = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else "\n".join(lines[1:])
+
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        # Fallback: try to extract JSON block
+        import re
+
+        match = re.search(r"\{.*\}", content, re.DOTALL)
+        if match:
+            return json.loads(match.group())
+        raise AIServiceError(f"Could not parse AI JSON response: {content[:200]}")
+
+
+async def generate_sql(natural_query: str) -> dict:
+    """Call OpenRouter API with thinking enabled and return parsed response."""
+    headers = _build_headers()
+    payload = _build_payload(natural_query)
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
@@ -178,23 +215,76 @@ async def generate_sql(natural_query: str) -> dict:
     choice = data["choices"][0]["message"]
     raw_content = choice.get("content", "")
     thinking = choice.get("reasoning_content", "") or choice.get("reasoning", "")
-
-    # Parse JSON from content (may be wrapped in ```json ... ```)
-    content = raw_content.strip()
-    if content.startswith("```"):
-        lines = content.split("\n")
-        content = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else "\n".join(lines[1:])
-
-    try:
-        parsed = json.loads(content)
-    except json.JSONDecodeError:
-        # Fallback: try to extract JSON block
-        import re
-        match = re.search(r'\{.*\}', content, re.DOTALL)
-        if match:
-            parsed = json.loads(match.group())
-        else:
-            raise AIServiceError(f"Could not parse AI JSON response: {content[:200]}")
+    parsed = _parse_ai_content(raw_content)
 
     parsed["thinking"] = thinking
     return parsed
+
+
+async def stream_generate_sql(natural_query: str) -> AsyncIterator[dict]:
+    """
+    Stream AI generation from OpenRouter.
+    Yields:
+      - {"type": "thinking", "delta": "..."} in real time
+      - {"type": "result", "data": parsed_json} when completed
+    """
+    headers = _build_headers()
+    payload = _build_payload(natural_query, stream=True)
+
+    thinking_parts: list[str] = []
+    content_parts: list[str] = []
+
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        try:
+            async with client.stream(
+                "POST",
+                f"{OPENROUTER_BASE}/chat/completions",
+                headers=headers,
+                json=payload,
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+
+                    payload_line = line[5:].strip()
+                    if payload_line == "[DONE]":
+                        break
+
+                    try:
+                        chunk = json.loads(payload_line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    choices = chunk.get("choices") or []
+                    if not choices:
+                        continue
+
+                    delta = choices[0].get("delta", {})
+                    if not isinstance(delta, dict):
+                        continue
+
+                    reasoning_delta = (
+                        delta.get("reasoning_content")
+                        or delta.get("reasoning")
+                        or ""
+                    )
+                    if reasoning_delta:
+                        thinking_parts.append(reasoning_delta)
+                        yield {"type": "thinking", "delta": reasoning_delta}
+
+                    content_delta = delta.get("content") or ""
+                    if content_delta:
+                        content_parts.append(content_delta)
+        except httpx.HTTPStatusError as e:
+            raise AIServiceError(f"OpenRouter HTTP error: {e.response.status_code} — {e.response.text}")
+        except httpx.RequestError as e:
+            raise AIServiceError(f"OpenRouter connection error: {str(e)}")
+
+    raw_content = "".join(content_parts).strip()
+    if not raw_content:
+        raise AIServiceError("OpenRouter streaming returned empty content")
+
+    parsed = _parse_ai_content(raw_content)
+    parsed["thinking"] = "".join(thinking_parts).strip()
+    yield {"type": "result", "data": parsed}

@@ -15,7 +15,7 @@
     <div v-if="expanded" class="thinking-panel animate-fade-in">
       <div class="flex items-center gap-2 mb-3 pb-2 border-b border-yellow-200">
         <div class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></div>
-        <span class="text-yellow-600 font-semibold text-xs uppercase tracking-wide">Chain of Thought</span>
+        <span class="text-yellow-600 font-semibold text-xs uppercase tracking-wide">Ход рассуждений</span>
       </div>
       <div class="text-gray-700 leading-relaxed">{{ thinking }}</div>
     </div>

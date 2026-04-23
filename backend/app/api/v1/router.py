@@ -1,4 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from fastapi.encoders import jsonable_encoder
+import json
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text
 
@@ -6,7 +9,7 @@ from app.infrastructure.database import get_db
 from app.infrastructure.models import (
     QueryLog, SavedReport, User, Driver, Trip, SemanticTerm
 )
-from app.application.nl2sql_service import process_nl_query
+from app.application.nl2sql_service import process_nl_query, process_nl_query_stream
 from app.application.security_service import validate_sql
 from app.domain.exceptions import DriveeryException, GuardrailViolation, SQLExecutionError
 from app.api.v1.schemas import (
@@ -52,6 +55,31 @@ async def run_nl_query(req: NLQueryRequest, db: AsyncSession = Depends(get_db)):
         result=result_out,
         confidence=resp.confidence,
         query_log_id=resp.query_log_id,
+        is_fallback=resp.is_fallback,
+    )
+
+
+@router.post("/query/stream", tags=["NL2SQL"])
+async def run_nl_query_stream(req: NLQueryRequest, db: AsyncSession = Depends(get_db)):
+    """Stream AI thinking in real time and send final NL2SQL result as SSE."""
+
+    async def event_generator():
+        try:
+            async for event in process_nl_query_stream(req.query, db, req.user_id):
+                event_payload = jsonable_encoder(event)
+                yield f"data: {json.dumps(event_payload, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        except DriveeryException as e:
+            error_event = {"type": "error", "error": e.message, "code": e.code}
+            yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            error_event = {"type": "error", "error": str(e), "code": "INTERNAL"}
+            yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
 
 

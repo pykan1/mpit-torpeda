@@ -1,11 +1,11 @@
 <template>
-  <div class="p-8">
-    <div class="mb-6 flex items-center justify-between">
+  <div class="p-4 sm:p-6 lg:p-8 max-w-full overflow-x-hidden">
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
       <div>
         <h1 class="text-2xl font-bold text-gray-900">Сохранённые отчёты</h1>
         <p class="text-sm text-gray-500 mt-1">Переиспользуйте запросы и настройте расписание</p>
       </div>
-      <RouterLink to="/" class="btn-primary">
+      <RouterLink to="/" class="btn-primary shrink-0">
         <IconPlus class="w-4 h-4" /> Новый запрос
       </RouterLink>
     </div>
@@ -27,17 +27,17 @@
         :key="report.id"
         class="card group hover:border-drivee-200 transition-all duration-200"
       >
-        <div class="flex items-start justify-between">
-          <div class="flex-1">
+        <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div class="flex-1 min-w-0">
             <div class="flex items-center gap-3 mb-2 flex-wrap">
-              <h3 class="font-semibold text-gray-800">{{ report.title }}</h3>
+              <h3 class="font-semibold text-gray-800 break-words">{{ report.title }}</h3>
               <span v-if="report.is_public" class="badge-ok text-xs">публичный</span>
               <span v-if="report.schedule" class="badge-warn text-xs flex items-center gap-1">
                 <IconClock class="w-3 h-3" /> {{ scheduleLabel(report.schedule) }}
               </span>
             </div>
-            <p class="text-sm text-gray-500 mb-3 italic">"{{ report.natural_query }}"</p>
-            <div class="flex items-center gap-4 text-xs text-gray-400">
+            <p class="text-sm text-gray-500 mb-3 italic break-all">"{{ report.natural_query }}"</p>
+            <div class="flex items-center gap-4 text-xs text-gray-400 flex-wrap">
               <span class="flex items-center gap-1">
                 <IconChart class="w-3 h-3" /> {{ report.chart_type }}
               </span>
@@ -46,7 +46,7 @@
               </span>
             </div>
           </div>
-          <div class="flex gap-2 ml-4">
+          <div class="flex gap-2 md:ml-4 shrink-0">
             <button
               @click="handleRun(report)"
               class="btn-primary text-sm py-1.5"

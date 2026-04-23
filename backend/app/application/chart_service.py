@@ -1,10 +1,55 @@
+from datetime import date, datetime
 from app.domain.entities import ChartType, QueryResult
 
 
-def auto_select_chart(columns: list[str], rows: list[list], suggested: str | None = None) -> ChartType:
+LIST_INTENT_KEYWORDS = (
+    "список",
+    "перечень",
+    "выведи всех",
+    "покажи всех",
+    "детали",
+    "подробно",
+    "list",
+    "all drivers",
+    "all users",
+)
+
+
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _is_time_like(value) -> bool:
+    return isinstance(value, (datetime, date))
+
+
+def auto_select_chart(
+    columns: list[str],
+    rows: list[list],
+    suggested: str | None = None,
+    natural_query: str | None = None,
+) -> ChartType:
     """Auto-select chart type based on data shape and AI suggestion."""
-    if suggested and suggested in ChartType.__members__.values():
-        return ChartType(suggested)
+    if suggested:
+        try:
+            return ChartType(suggested)
+        except ValueError:
+            pass
+
+    query_text = (natural_query or "").lower()
+    if query_text and any(token in query_text for token in LIST_INTENT_KEYWORDS):
+        return ChartType.TABLE
+
+    if rows and len(columns) >= 4:
+        return ChartType.TABLE
+
+    if rows and len(columns) >= 2:
+        sample = rows[0]
+        numeric_count = sum(1 for v in sample if _is_number(v))
+        time_like_count = sum(1 for v in sample if _is_time_like(v))
+        # Mostly dimensional data (entities / attributes) is better as table.
+        if numeric_count <= 1 and time_like_count <= 1 and len(columns) >= 3:
+            return ChartType.TABLE
 
     if not rows or not columns:
         return ChartType.TABLE
@@ -22,6 +67,10 @@ def auto_select_chart(columns: list[str], rows: list[list], suggested: str | Non
     if has_time and num_cols >= 2:
         return ChartType.LINE
 
+    # Few rows, two cols = pie
+    if num_rows <= 8 and num_cols == 2:
+        return ChartType.PIE
+
     # Category + metric = bar
     if num_cols == 2:
         return ChartType.BAR
@@ -29,10 +78,6 @@ def auto_select_chart(columns: list[str], rows: list[list], suggested: str | Non
     # Many cols = table
     if num_cols > 4:
         return ChartType.TABLE
-
-    # Few rows, two cols = pie
-    if num_rows <= 8 and num_cols == 2:
-        return ChartType.PIE
 
     return ChartType.BAR
 

@@ -12,7 +12,11 @@
             <div class="w-1.5 h-1.5 rounded-full bg-drivee-500"></div>
             {{ store.currentResult.result?.row_count || 0 }} строк
           </div>
-          <button v-if="store.currentResult" @click="showSaveModal = true" class="btn-secondary text-sm">
+          <button
+            v-if="store.currentResult && !store.currentResult.is_fallback && store.currentResult.sql"
+            @click="showSaveModal = true"
+            class="btn-secondary text-sm"
+          >
             <IconSave class="w-4 h-4" /> Сохранить отчёт
           </button>
         </div>
@@ -45,7 +49,7 @@
       <div v-if="store.currentResult || store.loading || store.error" class="mb-6 animate-slide-up">
         <!-- Loading -->
         <div v-if="store.loading" class="card flex items-center justify-center py-16">
-          <div class="text-center">
+          <div class="text-center w-full max-w-2xl">
             <div class="relative w-16 h-16 mx-auto mb-4">
               <div class="w-16 h-16 rounded-full border-4 border-drivee-100 border-t-drivee-500 animate-spin"></div>
               <div class="absolute inset-0 flex items-center justify-center">
@@ -54,6 +58,10 @@
             </div>
             <p class="text-gray-600 font-medium">ИИ анализирует запрос...</p>
             <p class="text-xs text-gray-400 mt-1">Генерирую SQL и размышляю</p>
+            <div v-if="store.thinkingPreview" class="mt-5 text-left">
+              <ThinkingLog :thinking="store.thinkingPreview" />
+              <div ref="thinkingBottomRef" class="h-1"></div>
+            </div>
           </div>
         </div>
 
@@ -90,12 +98,18 @@
           </div>
 
           <!-- Thinking log -->
-          <div v-if="store.currentResult.thinking" class="card">
+          <div v-if="store.currentResult.thinking && !store.currentResult.is_fallback" class="card">
             <ThinkingLog :thinking="store.currentResult.thinking" />
           </div>
 
+          <div v-if="store.currentResult.is_fallback" class="card border-blue-100 bg-blue-50">
+            <p class="text-sm text-blue-700">
+              Отправьте запрос по данным Drivee: выручка, поездки, отмены, водители, города, периоды.
+            </p>
+          </div>
+
           <!-- SQL -->
-          <div class="card">
+          <div v-if="!store.currentResult.is_fallback && store.currentResult.sql" class="card">
             <div class="flex items-center justify-between mb-3">
               <span class="text-sm font-semibold text-gray-600 flex items-center gap-2">
                 <IconSearch class="w-4 h-4" /> Сгенерированный SQL
@@ -109,7 +123,7 @@
           </div>
 
           <!-- Guardrail -->
-          <div class="card">
+          <div v-if="!store.currentResult.is_fallback && store.currentResult.sql" class="card">
             <h3 class="text-sm font-semibold text-gray-600 mb-3 flex items-center gap-2">
               <IconShield class="w-4 h-4" /> Проверка безопасности
             </h3>
@@ -117,7 +131,7 @@
           </div>
 
           <!-- Chart & Table -->
-          <div v-if="store.currentResult.result" class="card">
+          <div v-if="!store.currentResult.is_fallback && store.currentResult.result" class="card">
             <div class="flex items-center justify-between mb-4">
               <h3 class="font-semibold text-gray-800 flex items-center gap-2">
                 <IconChart class="w-5 h-5 text-drivee-500" /> Результат запроса
@@ -132,7 +146,10 @@
             />
           </div>
 
-          <div v-else class="card border-yellow-100 bg-yellow-50 text-center py-8">
+          <div
+            v-else-if="!store.currentResult.is_fallback"
+            class="card border-yellow-100 bg-yellow-50 text-center py-8"
+          >
             <IconWarning class="w-8 h-8 text-yellow-500 mx-auto mb-2" />
             <p class="text-yellow-700 font-medium">Запрос заблокирован guardrail — данные не получены</p>
           </div>
@@ -212,7 +229,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useQueryStore } from '@/stores/query'
 import { useApi } from '@/composables/useApi'
 import ThinkingLog from '@/components/ThinkingLog.vue'
@@ -237,11 +254,13 @@ const { saveReport } = useApi()
 
 const queryText = ref('')
 const inputRef = ref(null)
+const thinkingBottomRef = ref(null)
 const copied = ref(false)
 const showSaveModal = ref(false)
 const reportTitle = ref('')
 const reportSchedule = ref('')
 const reportPublic = ref(false)
+let autoScrollRaf = null
 
 const quickExamples = ['Выручка по городам', 'Отмены за неделю', 'Топ водителей по рейтингу']
 
@@ -261,6 +280,41 @@ onMounted(() => {
   store.fetchTemplates()
   inputRef.value?.focus()
 })
+
+onBeforeUnmount(() => {
+  if (autoScrollRaf) {
+    cancelAnimationFrame(autoScrollRaf)
+    autoScrollRaf = null
+  }
+})
+
+function scheduleAutoScrollToThinking() {
+  if (!store.loading) return
+  if (autoScrollRaf) cancelAnimationFrame(autoScrollRaf)
+  autoScrollRaf = requestAnimationFrame(async () => {
+    await nextTick()
+    if (thinkingBottomRef.value) {
+      thinkingBottomRef.value.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    } else {
+      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })
+    }
+  })
+}
+
+watch(
+  () => store.thinkingPreview,
+  () => {
+    if (!store.thinkingPreview) return
+    scheduleAutoScrollToThinking()
+  }
+)
+
+watch(
+  () => store.loading,
+  (isLoading) => {
+    if (isLoading) scheduleAutoScrollToThinking()
+  }
+)
 
 async function handleSubmit() {
   if (!queryText.value.trim() || store.loading) return

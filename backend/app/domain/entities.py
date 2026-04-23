@@ -65,3 +65,4 @@ class NL2SQLResponse:
     result: QueryResult | None
     confidence: float
     query_log_id: int | None = None
+    is_fallback: bool = False
