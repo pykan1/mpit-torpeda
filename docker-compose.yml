@@ -26,7 +26,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql+asyncpg://driveery:driveery@db:5432/driveery
-      OPENROUTER_API_KEY: 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
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       OPENROUTER_MODEL: qwen/qwen3.6-plus
       SECRET_KEY: hackathon-driveery-2024
       ALLOWED_ORIGINS: "http://localhost:5173,http://localhost:3000"
