@@ -142,16 +142,57 @@ function destroyChart() {
   }
 }
 
+function normalizeDataForType(chartType, rawData) {
+  if (!rawData || typeof rawData !== 'object') return rawData
+  const cloned = {
+    ...rawData,
+    datasets: Array.isArray(rawData.datasets)
+      ? rawData.datasets.map((dataset) => ({ ...dataset }))
+      : rawData.datasets,
+  }
+  if (!Array.isArray(cloned.datasets)) return cloned
+
+  if (chartType === 'line') {
+    cloned.datasets = cloned.datasets.map((dataset, index) => {
+      const next = { ...dataset }
+      const fallbackColor = ['#27AE60', '#2ECC71', '#1A7A42'][index % 3]
+
+      next.showLine = true
+      next.borderWidth = Number.isFinite(next.borderWidth) ? next.borderWidth : 2
+      next.tension = Number.isFinite(next.tension) ? next.tension : 0.35
+      next.pointRadius = Number.isFinite(next.pointRadius) ? next.pointRadius : 3
+      next.pointHoverRadius = Number.isFinite(next.pointHoverRadius) ? next.pointHoverRadius : 5
+
+      if (!next.borderColor || next.borderColor === '#ffffff' || Array.isArray(next.borderColor)) {
+        next.borderColor = fallbackColor
+      }
+      if (Array.isArray(next.backgroundColor)) {
+        next.backgroundColor = `${fallbackColor}33`
+      }
+
+      return next
+    })
+  }
+
+  return cloned
+}
+
 async function renderChart() {
   destroyChart()
   await nextTick()
 
   if (!chartCanvas.value || selectedType.value === 'table' || selectedType.value === 'kpi') return
   if (!props.chartData?.datasets?.length && !props.chartData?.data?.length) return
+  let normalizedData = props.chartData
+  try {
+    normalizedData = normalizeDataForType(selectedType.value, props.chartData)
+  } catch {
+    normalizedData = props.chartData
+  }
 
   const config = {
     type: selectedType.value,
-    data: props.chartData,
+    data: normalizedData,
     options: {
       responsive: true,
       maintainAspectRatio: true,

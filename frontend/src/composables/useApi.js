@@ -9,19 +9,19 @@ export const api = axios.create({
 })
 
 export function useApi() {
-  const runQuery = async (query, userId = null) => {
-    const { data } = await api.post('/query', { query, user_id: userId })
+  const runQuery = async (query, userId = null, manualApproval = false) => {
+    const { data } = await api.post('/query', { query, user_id: userId, manual_approval: manualApproval })
     return data
   }
 
-  const runQueryStream = async (query, userId = null, { onThinking } = {}) => {
+  const runQueryStream = async (query, userId = null, { onThinking, manualApproval = false } = {}) => {
     const response = await fetch(`${API_BASE}/query/stream`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
       },
-      body: JSON.stringify({ query, user_id: userId }),
+      body: JSON.stringify({ query, user_id: userId, manual_approval: manualApproval }),
     })
 
     if (!response.ok || !response.body) {
@@ -140,6 +140,11 @@ export function useApi() {
     return data
   }
 
+  const executePreparedSql = async (payload) => {
+    const { data } = await api.post('/query/execute', payload)
+    return data
+  }
+
   return {
     runQuery,
     runQueryStream,
@@ -156,5 +161,6 @@ export function useApi() {
     createSemanticTerm,
     getStats,
     validateSql,
+    executePreparedSql,
   }
 }

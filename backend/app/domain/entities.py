@@ -66,3 +66,4 @@ class NL2SQLResponse:
     confidence: float
     query_log_id: int | None = None
     is_fallback: bool = False
+    awaiting_manual_execution: bool = False

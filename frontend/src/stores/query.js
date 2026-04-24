@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useApi } from '@/composables/useApi'
 
 export const useQueryStore = defineStore('query', () => {
-  const { runQueryStream, getTemplates } = useApi()
+  const { runQueryStream, executePreparedSql, getTemplates } = useApi()
 
   const loading = ref(false)
   const error = ref(null)
@@ -12,13 +12,14 @@ export const useQueryStore = defineStore('query', () => {
   const templates = ref([])
   const history = ref([])
 
-  async function executeQuery(queryText) {
+  async function executeQuery(queryText, manualApproval = false) {
     loading.value = true
     error.value = null
     thinkingPreview.value = ''
     currentResult.value = null
     try {
       const result = await runQueryStream(queryText, null, {
+        manualApproval,
         onThinking: (delta) => {
           thinkingPreview.value += delta
         },
@@ -45,5 +46,40 @@ export const useQueryStore = defineStore('query', () => {
     error.value = null
   }
 
-  return { loading, error, currentResult, thinkingPreview, templates, history, executeQuery, fetchTemplates, clearResult }
+  async function executeApprovedCurrentSql() {
+    if (!currentResult.value?.sql || !currentResult.value?.awaiting_manual_execution) return null
+    loading.value = true
+    error.value = null
+    try {
+      const result = await executePreparedSql({
+        natural_query: currentResult.value.natural_query,
+        interpretation: currentResult.value.interpretation || '',
+        sql: currentResult.value.sql,
+        thinking: currentResult.value.thinking || '',
+        confidence: currentResult.value.confidence || 0.8,
+      })
+      currentResult.value = result
+      history.value.unshift({ query: result.natural_query, result, timestamp: new Date().toISOString() })
+      if (history.value.length > 20) history.value.pop()
+      return result
+    } catch (e) {
+      error.value = e.response?.data?.detail?.error || e.message || 'Ошибка исполнения SQL'
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
+  return {
+    loading,
+    error,
+    currentResult,
+    thinkingPreview,
+    templates,
+    history,
+    executeQuery,
+    executeApprovedCurrentSql,
+    fetchTemplates,
+    clearResult,
+  }
 })

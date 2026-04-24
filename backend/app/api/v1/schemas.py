@@ -6,6 +6,16 @@ from typing import Any
 class NLQueryRequest(BaseModel):
     query: str
     user_id: int | None = None
+    manual_approval: bool = False
+
+
+class SQLExecuteRequest(BaseModel):
+    natural_query: str
+    interpretation: str = ""
+    sql: str
+    thinking: str = ""
+    confidence: float = 0.8
+    user_id: int | None = None
 
 
 class GuardrailReportOut(BaseModel):
@@ -32,6 +42,7 @@ class NLQueryResponse(BaseModel):
     confidence: float
     query_log_id: int | None
     is_fallback: bool = False
+    awaiting_manual_execution: bool = False
 
 
 class SaveReportRequest(BaseModel):

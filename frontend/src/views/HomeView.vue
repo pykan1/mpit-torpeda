@@ -8,12 +8,28 @@
           <p class="text-sm text-gray-500 mt-0.5">Задайте вопрос о данных Drivee простыми словами</p>
         </div>
         <div class="flex items-center gap-3">
+          <label class="flex items-center gap-2 text-xs text-gray-600 select-none">
+            <span>Ручной запуск SQL</span>
+            <button
+              type="button"
+              role="switch"
+              :aria-checked="manualApprovalEnabled"
+              @click="toggleManualApproval"
+              class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+              :class="manualApprovalEnabled ? 'bg-drivee-500' : 'bg-gray-300'"
+            >
+              <span
+                class="inline-block h-5 w-5 transform rounded-full bg-white transition-transform"
+                :class="manualApprovalEnabled ? 'translate-x-5' : 'translate-x-1'"
+              />
+            </button>
+          </label>
           <div v-if="store.currentResult" class="flex items-center gap-2 text-xs text-gray-500">
             <div class="w-1.5 h-1.5 rounded-full bg-drivee-500"></div>
             {{ store.currentResult.result?.row_count || 0 }} строк
           </div>
           <button
-            v-if="store.currentResult && !store.currentResult.is_fallback && store.currentResult.sql"
+            v-if="store.currentResult && !store.currentResult.is_fallback && store.currentResult.sql && !store.currentResult.awaiting_manual_execution"
             @click="showSaveModal = true"
             class="btn-secondary text-sm"
           >
@@ -130,6 +146,27 @@
             <GuardrailBadge :guardrail="store.currentResult.guardrail" />
           </div>
 
+          <div
+            v-if="!store.currentResult.is_fallback && store.currentResult.awaiting_manual_execution"
+            class="card border-blue-100 bg-blue-50"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-sm font-semibold text-blue-800">Ожидается подтверждение оператора</p>
+                <p class="text-xs text-blue-700 mt-1">
+                  SQL сгенерирован и проверен. Нажмите кнопку ниже, чтобы выполнить запрос и получить результат.
+                </p>
+              </div>
+              <button
+                @click="handleManualExecute"
+                class="btn-primary flex items-center gap-2 whitespace-nowrap"
+                :disabled="store.loading || store.currentResult.guardrail?.severity === 'blocked'"
+              >
+                <IconPlay class="w-4 h-4" /> Выполнить SQL
+              </button>
+            </div>
+          </div>
+
           <!-- Chart & Table -->
           <div v-if="!store.currentResult.is_fallback && store.currentResult.result" class="card">
             <div class="flex items-center justify-between mb-4">
@@ -147,7 +184,7 @@
           </div>
 
           <div
-            v-else-if="!store.currentResult.is_fallback"
+            v-else-if="!store.currentResult.is_fallback && !store.currentResult.awaiting_manual_execution"
             class="card border-yellow-100 bg-yellow-50 text-center py-8"
           >
             <IconWarning class="w-8 h-8 text-yellow-500 mx-auto mb-2" />
@@ -220,8 +257,13 @@
           </label>
         </div>
         <div class="flex gap-3 mt-5">
-          <button @click="showSaveModal = false" class="btn-secondary flex-1 justify-center">Отмена</button>
-          <button @click="handleSaveReport" class="btn-primary flex-1 justify-center" :disabled="!reportTitle">Сохранить</button>
+          <button @click="closeSaveModal" class="btn-secondary flex-1 justify-center">Отмена</button>
+          <button @click="handleSaveReport" class="btn-primary flex-1 justify-center" :disabled="!reportTitle || saveReportLoading">
+            {{ saveReportLoading ? 'Сохраняю...' : 'Сохранить' }}
+          </button>
+        </div>
+        <div v-if="saveReportError" class="mt-3 text-sm text-red-600">
+          {{ saveReportError }}
         </div>
       </div>
     </div>
@@ -248,6 +290,7 @@ import IconMap from '@/components/icons/IconMap.vue'
 import IconCurrency from '@/components/icons/IconCurrency.vue'
 import IconCar from '@/components/icons/IconCar.vue'
 import IconStar from '@/components/icons/IconStar.vue'
+import IconPlay from '@/components/icons/IconPlay.vue'
 
 const store = useQueryStore()
 const { saveReport } = useApi()
@@ -260,7 +303,10 @@ const showSaveModal = ref(false)
 const reportTitle = ref('')
 const reportSchedule = ref('')
 const reportPublic = ref(false)
+const saveReportLoading = ref(false)
+const saveReportError = ref('')
 let autoScrollRaf = null
+const manualApprovalEnabled = ref(true)
 
 const quickExamples = ['Выручка по городам', 'Отмены за неделю', 'Топ водителей по рейтингу']
 
@@ -278,6 +324,10 @@ function templateIcon(category) {
 
 onMounted(() => {
   store.fetchTemplates()
+  const saved = localStorage.getItem('driveery_manual_sql_approval')
+  if (saved !== null) {
+    manualApprovalEnabled.value = saved === 'true'
+  }
   inputRef.value?.focus()
 })
 
@@ -320,7 +370,12 @@ async function handleSubmit() {
   if (!queryText.value.trim() || store.loading) return
   const q = queryText.value.trim()
   queryText.value = ''
-  await store.executeQuery(q)
+  await store.executeQuery(q, manualApprovalEnabled.value)
+}
+
+function toggleManualApproval() {
+  manualApprovalEnabled.value = !manualApprovalEnabled.value
+  localStorage.setItem('driveery_manual_sql_approval', String(manualApprovalEnabled.value))
 }
 
 function fillTemplate(q) {
@@ -337,15 +392,35 @@ async function copySql() {
 
 async function handleSaveReport() {
   if (!reportTitle.value || !store.currentResult) return
-  await saveReport({
-    title: reportTitle.value,
-    natural_query: store.currentResult.natural_query,
-    sql_query: store.currentResult.sql,
-    chart_type: store.currentResult.result?.chart_type || 'table',
-    schedule: reportSchedule.value || null,
-    is_public: reportPublic.value,
-  })
+  saveReportLoading.value = true
+  saveReportError.value = ''
+  try {
+    await saveReport({
+      title: reportTitle.value,
+      natural_query: store.currentResult.natural_query,
+      sql_query: store.currentResult.sql,
+      chart_type: store.currentResult.result?.chart_type || 'table',
+      schedule: reportSchedule.value || null,
+      is_public: reportPublic.value,
+    })
+    closeSaveModal()
+  } catch (e) {
+    saveReportError.value = e.response?.data?.detail?.error || e.message || 'Не удалось сохранить отчет'
+  } finally {
+    saveReportLoading.value = false
+  }
+}
+
+async function handleManualExecute() {
+  if (!store.currentResult?.awaiting_manual_execution || store.loading) return
+  await store.executeApprovedCurrentSql()
+}
+
+function closeSaveModal() {
   showSaveModal.value = false
   reportTitle.value = ''
+  reportSchedule.value = ''
+  reportPublic.value = false
+  saveReportError.value = ''
 }
 </script>

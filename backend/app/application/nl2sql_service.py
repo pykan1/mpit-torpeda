@@ -17,6 +17,7 @@ async def process_nl_query(
     natural_query: str,
     db: AsyncSession,
     user_id: int | None = None,
+    manual_approval: bool = False,
 ) -> NL2SQLResponse:
     """
     Main use case: natural language → SQL → execution → chart.
@@ -27,11 +28,11 @@ async def process_nl_query(
     4. Build chart data
     5. Log everything
     """
-    if is_out_of_scope_query(natural_query):
-        ai_result = build_fallback_ai_result()
-    else:
-        ai_result = await generate_sql(natural_query)
-    return await _finalize_nl_query(natural_query, ai_result, db, user_id)
+    prepared = await prepare_nl_query(natural_query, user_id=user_id)
+    if manual_approval and not prepared.is_fallback:
+        prepared.awaiting_manual_execution = True
+        return prepared
+    return await execute_prepared_sql_response(prepared, db, user_id)
 
 
 def _serialize_response(resp: NL2SQLResponse) -> dict[str, Any]:
@@ -59,6 +60,7 @@ def _serialize_response(resp: NL2SQLResponse) -> dict[str, Any]:
         "confidence": resp.confidence,
         "query_log_id": resp.query_log_id,
         "is_fallback": resp.is_fallback,
+        "awaiting_manual_execution": resp.awaiting_manual_execution,
     }
 
 
@@ -66,15 +68,12 @@ async def process_nl_query_stream(
     natural_query: str,
     db: AsyncSession,
     user_id: int | None = None,
+    manual_approval: bool = False,
 ) -> AsyncIterator[dict[str, Any]]:
     """Stream AI thinking in real time, then execute SQL and return final payload."""
     if is_out_of_scope_query(natural_query):
-        response = await _finalize_nl_query(
-            natural_query,
-            build_fallback_ai_result(),
-            db,
-            user_id,
-        )
+        prepared = await prepare_nl_query(natural_query, user_id=user_id)
+        response = await execute_prepared_sql_response(prepared, db, user_id)
         yield {"type": "final", "data": _serialize_response(response)}
         return
 
@@ -88,17 +87,30 @@ async def process_nl_query_stream(
     if not ai_result:
         raise SQLExecutionError("AI did not return a final result")
 
-    response = await _finalize_nl_query(natural_query, ai_result, db, user_id)
+    prepared = _build_prepared_response(natural_query, ai_result)
+    if manual_approval and not prepared.is_fallback:
+        prepared.awaiting_manual_execution = True
+        response = prepared
+    else:
+        response = await execute_prepared_sql_response(prepared, db, user_id)
     yield {"type": "final", "data": _serialize_response(response)}
 
 
-async def _finalize_nl_query(
+async def prepare_nl_query(
     natural_query: str,
-    ai_result: dict[str, Any],
-    db: AsyncSession,
     user_id: int | None = None,
 ) -> NL2SQLResponse:
+    if is_out_of_scope_query(natural_query):
+        ai_result = build_fallback_ai_result()
+    else:
+        ai_result = await generate_sql(natural_query)
+    return _build_prepared_response(natural_query, ai_result)
 
+
+def _build_prepared_response(
+    natural_query: str,
+    ai_result: dict[str, Any],
+) -> NL2SQLResponse:
     sql = ai_result.get("sql", "").strip()
     interpretation = ai_result.get("interpretation", "")
     thinking = ai_result.get("thinking", "")
@@ -116,15 +128,35 @@ async def _finalize_nl_query(
     else:
         guardrail = validate_sql(sql)
 
+    return NL2SQLResponse(
+        natural_query=natural_query,
+        interpretation=interpretation,
+        sql=sql,
+        thinking=thinking,
+        guardrail=guardrail,
+        result=None,
+        confidence=confidence,
+        query_log_id=None,
+        is_fallback=is_fallback,
+    )
+
+
+async def execute_prepared_sql_response(
+    prepared: NL2SQLResponse,
+    db: AsyncSession,
+    user_id: int | None = None,
+) -> NL2SQLResponse:
+    # Guardrails are always re-evaluated server-side right before execution.
+    guardrail = prepared.guardrail if prepared.is_fallback else validate_sql(prepared.sql)
     result = None
     execution_success = False
     row_count = 0
     execution_ms = 0
 
-    if not is_fallback and guardrail.severity != GuardrailSeverity.BLOCKED:
+    if not prepared.is_fallback and guardrail.severity != GuardrailSeverity.BLOCKED:
         start = time.monotonic()
         try:
-            raw = await db.execute(text(sql))
+            raw = await db.execute(text(prepared.sql))
             columns = list(raw.keys())
             rows = [list(r) for r in raw.fetchall()]
             execution_ms = int((time.monotonic() - start) * 1000)
@@ -134,10 +166,10 @@ async def _finalize_nl_query(
             chart_type = auto_select_chart(
                 columns,
                 rows,
-                suggested_chart,
-                natural_query=natural_query,
+                None,
+                natural_query=prepared.natural_query,
             )
-            chart_data = build_chart_data(columns, rows, chart_type, chart_config)
+            chart_data = build_chart_data(columns, rows, chart_type, None)
 
             result = QueryResult(
                 columns=columns,
@@ -152,11 +184,11 @@ async def _finalize_nl_query(
 
     log = QueryLog(
         user_id=user_id,
-        natural_query=natural_query,
-        interpretation=interpretation,
-        generated_sql=sql,
-        ai_thinking=thinking,
-        confidence=confidence,
+        natural_query=prepared.natural_query,
+        interpretation=prepared.interpretation,
+        generated_sql=prepared.sql,
+        ai_thinking=prepared.thinking,
+        confidence=prepared.confidence,
         guardrail_status=guardrail.severity.value,
         guardrail_violations=guardrail.violations,
         execution_success=execution_success,
@@ -168,13 +200,14 @@ async def _finalize_nl_query(
     await db.refresh(log)
 
     return NL2SQLResponse(
-        natural_query=natural_query,
-        interpretation=interpretation,
-        sql=sql,
-        thinking=thinking,
+        natural_query=prepared.natural_query,
+        interpretation=prepared.interpretation,
+        sql=prepared.sql,
+        thinking=prepared.thinking,
         guardrail=guardrail,
         result=result,
-        confidence=confidence,
+        confidence=prepared.confidence,
         query_log_id=log.id,
-        is_fallback=is_fallback,
+        is_fallback=prepared.is_fallback,
+        awaiting_manual_execution=False,
     )
