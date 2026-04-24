@@ -23,6 +23,13 @@ docker compose up -d --build
 - Backend API: `http://localhost:8000`
 - Swagger: `http://localhost:8000/docs`
 
+## База данных
+
+- Проект использует **PostgreSQL** (`postgres:15-alpine`) через Docker Compose.
+- Для первого старта на пустой БД автоматически применяется дамп:
+  - `db/init/01_seed.sql.gz`
+- Если данные в БД уже есть (существует `pgdata`), дамп повторно **не** применяется.
+
 ## Что умеет
 
 - Запросы к данным на русском языке через чат
