@@ -1,0 +1,55 @@
+<mxfile host="app.diagrams.net" agent="Codex">
+  <diagram id="db-schema-uml" name="DB UML">
+    <mxGraphModel dx="2236" dy="1536" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1920" pageHeight="1080" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;" value="UML диаграмма БД Driveery" vertex="1">
+          <mxGeometry height="40" width="660" x="630" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="users" parent="1" style="shape=umlClass;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;fontSize=13;fillColor=#f0fdf4;strokeColor=#22c55e;" value="&lt;b&gt;User (users)&lt;/b&gt;&#xa;--&#xa;+ id: Integer {PK}&#xa;+ name: String(100)&#xa;+ email: String(150) {UNIQUE}&#xa;+ role: String(20)&#xa;+ is_active: Boolean&#xa;+ created_at: DateTime" vertex="1">
+          <mxGeometry height="220" width="330" x="530" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="cities" parent="1" style="shape=umlClass;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;fontSize=13;fillColor=#f0fdf4;strokeColor=#22c55e;" value="&lt;b&gt;City (cities)&lt;/b&gt;&#xa;--&#xa;+ id: Integer {PK}&#xa;+ name: String(100) {UNIQUE}&#xa;+ region: String(100)&#xa;+ is_active: Boolean&#xa;+ launch_date: DateTime" vertex="1">
+          <mxGeometry height="210" width="330" x="1470" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="semantic_terms" parent="1" style="shape=umlClass;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;fontSize=13;fillColor=#ecfeff;strokeColor=#06b6d4;" value="&lt;b&gt;SemanticTerm (semantic_terms)&lt;/b&gt;&#xa;--&#xa;+ id: Integer {PK}&#xa;+ term: String(100) {UNIQUE}&#xa;+ aliases: JSON&#xa;+ sql_expression: Text&#xa;+ description: Text&#xa;+ category: String(50)" vertex="1">
+          <mxGeometry height="220" width="360" x="1250" y="95" as="geometry" />
+        </mxCell>
+        <mxCell id="saved_reports" parent="1" style="shape=umlClass;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;fontSize=13;fillColor=#fff7ed;strokeColor=#fb923c;" value="&lt;b&gt;SavedReport (saved_reports)&lt;/b&gt;&#xa;--&#xa;+ id: Integer {PK}&#xa;+ user_id: Integer {FK -&gt; users.id}&#xa;+ title: String(200)&#xa;+ natural_query: Text&#xa;+ sql_query: Text&#xa;+ chart_type: String(50)&#xa;+ schedule: String(50)?&#xa;+ is_public: Boolean&#xa;+ created_at: DateTime&#xa;+ last_run_at: DateTime?" vertex="1">
+          <mxGeometry height="320" width="370" x="160" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="drivers" parent="1" style="shape=umlClass;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;fontSize=13;fillColor=#fff7ed;strokeColor=#fb923c;" value="&lt;b&gt;Driver (drivers)&lt;/b&gt;&#xa;--&#xa;+ id: Integer {PK}&#xa;+ full_name: String(150)&#xa;+ city_id: Integer {FK -&gt; cities.id}&#xa;+ rating: Float&#xa;+ total_trips: Integer&#xa;+ car_model: String(100)&#xa;+ car_class: String(50)&#xa;+ is_active: Boolean&#xa;+ joined_at: DateTime" vertex="1">
+          <mxGeometry height="300" width="360" x="890" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="query_logs" parent="1" style="shape=umlClass;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;fontSize=13;fillColor=#fff7ed;strokeColor=#fb923c;" value="&lt;b&gt;QueryLog (query_logs)&lt;/b&gt;&#xa;--&#xa;+ id: Integer {PK}&#xa;+ user_id: Integer? {FK -&gt; users.id}&#xa;+ natural_query: Text&#xa;+ interpretation: Text&#xa;+ generated_sql: Text&#xa;+ ai_thinking: Text&#xa;+ confidence: Float&#xa;+ guardrail_status: String(20)&#xa;+ guardrail_violations: JSON&#xa;+ execution_success: Boolean&#xa;+ row_count: Integer&#xa;+ execution_ms: Integer&#xa;+ created_at: DateTime" vertex="1">
+          <mxGeometry height="380" width="390" x="370" y="810" as="geometry" />
+        </mxCell>
+        <mxCell id="trips" parent="1" style="shape=umlClass;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;fontSize=13;fillColor=#fefce8;strokeColor=#eab308;" value="&lt;b&gt;Trip (trips)&lt;/b&gt;&#xa;--&#xa;+ id: Integer {PK}&#xa;+ driver_id: Integer {FK -&gt; drivers.id}&#xa;+ city_id: Integer {FK -&gt; cities.id}&#xa;+ status: String(20)&#xa;+ distance_km: Float&#xa;+ duration_min: Integer&#xa;+ revenue: Float&#xa;+ passenger_rating: Float?&#xa;+ started_at: DateTime&#xa;+ ended_at: DateTime?&#xa;+ cancel_reason: String(200)?" vertex="1">
+          <mxGeometry height="340" width="360" x="890" y="740" as="geometry" />
+        </mxCell>
+        <mxCell id="orders" parent="1" style="shape=umlClass;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;fontSize=13;fillColor=#fefce8;strokeColor=#eab308;" value="&lt;b&gt;Order (orders)&lt;/b&gt;&#xa;--&#xa;+ id: Integer {PK}&#xa;+ city_id: Integer {FK -&gt; cities.id}&#xa;+ status: String(20)&#xa;+ amount: Float&#xa;+ channel: String(50)&#xa;+ created_at: DateTime&#xa;+ cancel_reason: String(200)?" vertex="1">
+          <mxGeometry height="250" width="330" x="1470" y="960" as="geometry" />
+        </mxCell>
+        <mxCell id="e_saved_report_user" edge="1" parent="1" source="saved_reports" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#15803d;strokeWidth=2;endArrow=open;endFill=0;" target="users" value="user_id">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_query_log_user" edge="1" parent="1" source="query_logs" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#15803d;strokeWidth=2;endArrow=open;endFill=0;dashed=1;" target="users" value="user_id">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_driver_city" edge="1" parent="1" source="drivers" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#15803d;strokeWidth=2;endArrow=open;endFill=0;" target="cities" value="city_id">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_trip_driver" edge="1" parent="1" source="trips" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#15803d;strokeWidth=2;endArrow=open;endFill=0;" target="drivers" value="driver_id">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_trip_city" edge="1" parent="1" source="trips" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#15803d;strokeWidth=2;endArrow=open;endFill=0;" target="cities" value="city_id">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_order_city" edge="1" parent="1" source="orders" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#15803d;strokeWidth=2;endArrow=open;endFill=0;" target="cities" value="city_id">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
