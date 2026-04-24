@@ -6,7 +6,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.infrastructure.database import Base
-from app.domain.entities import UserRole, TripStatus, OrderStatus  # noqa: F401 — used as string values
+from app.domain.entities import UserRole, OrderStatus  # noqa: F401 — used as string values
 
 
 class User(Base):
@@ -33,7 +33,6 @@ class City(Base):
     launch_date: Mapped[datetime] = mapped_column(DateTime)
 
     drivers: Mapped[list["Driver"]] = relationship(back_populates="city")
-    trips: Mapped[list["Trip"]] = relationship(back_populates="city")
 
 
 class Driver(Base):
@@ -50,26 +49,38 @@ class Driver(Base):
     joined_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     city: Mapped["City"] = relationship(back_populates="drivers")
-    trips: Mapped[list["Trip"]] = relationship(back_populates="driver")
 
 
 class Trip(Base):
     __tablename__ = "trips"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    driver_id: Mapped[int] = mapped_column(Integer, ForeignKey("drivers.id"))
-    city_id: Mapped[int] = mapped_column(Integer, ForeignKey("cities.id"))
-    status: Mapped[str] = mapped_column(String(20), default=TripStatus.COMPLETED)
-    distance_km: Mapped[float] = mapped_column(Float)
-    duration_min: Mapped[int] = mapped_column(Integer)
-    revenue: Mapped[float] = mapped_column(Float)
-    passenger_rating: Mapped[float | None] = mapped_column(Float, nullable=True)
-    started_at: Mapped[datetime] = mapped_column(DateTime)
-    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    cancel_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    city_id: Mapped[int] = mapped_column(Integer, index=True)
+    order_id: Mapped[str] = mapped_column(String(64), index=True)
+    tender_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    driver_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    offset_hours: Mapped[int] = mapped_column(Integer, default=0)
 
-    driver: Mapped["Driver"] = relationship(back_populates="trips")
-    city: Mapped["City"] = relationship(back_populates="trips")
+    status_order: Mapped[str] = mapped_column(String(20), index=True)
+    status_tender: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+
+    order_timestamp: Mapped[datetime] = mapped_column(DateTime, index=True)
+    tender_timestamp: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    driveraccept_timestamp: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    driverarrived_timestamp: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    driverstarttheride_timestamp: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    driverdone_timestamp: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    clientcancel_timestamp: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    drivercancel_timestamp: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    order_modified_local: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cancel_before_accept_local: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    distance_in_meters: Mapped[float | None] = mapped_column(Float, nullable=True)
+    duration_in_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    price_order_local: Mapped[float | None] = mapped_column(Float, nullable=True)
+    price_tender_local: Mapped[float | None] = mapped_column(Float, nullable=True)
+    price_start_local: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class Order(Base):

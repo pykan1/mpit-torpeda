@@ -124,7 +124,13 @@ function formatCell(cell, col) {
   if (cell === null || cell === undefined) return '—'
   const colLower = col?.toLowerCase() || ''
   if (typeof cell === 'number') {
-    if (colLower.includes('revenue') || colLower.includes('amount') || colLower.includes('выручка')) {
+    if (
+      colLower.includes('revenue') ||
+      colLower.includes('amount') ||
+      colLower.includes('price') ||
+      colLower.includes('выручка') ||
+      colLower.includes('стоим')
+    ) {
       return `${cell.toLocaleString('ru-RU')} ₽`
     }
     if (colLower.includes('rating') || colLower.includes('рейтинг')) {

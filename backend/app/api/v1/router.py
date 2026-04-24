@@ -292,7 +292,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     total_r = await db.scalar(select(func.count(SavedReport.id)))
     total_d = await db.scalar(select(func.count(Driver.id)))
     total_t = await db.scalar(select(func.count(Trip.id)))
-    total_rev = await db.scalar(select(func.sum(Trip.revenue))) or 0.0
+    total_rev = await db.scalar(select(func.sum(Trip.price_order_local))) or 0.0
 
     return StatsOut(
         total_queries=total_q or 0,

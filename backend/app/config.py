@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://driveery:driveery@db:5432/driveery"
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_MODEL: str = "qwen/qwen3.6-plus"
+    TRAIN_CSV_PATH: str = "train.csv"
     SECRET_KEY: str = "supersecretkey"
     ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
 

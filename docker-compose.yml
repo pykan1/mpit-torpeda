@@ -28,8 +28,11 @@ services:
       DATABASE_URL: postgresql+asyncpg://driveery:driveery@db:5432/driveery
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       OPENROUTER_MODEL: qwen/qwen3.6-plus
+      TRAIN_CSV_PATH: /app/train.csv
       SECRET_KEY: hackathon-driveery-2024
       ALLOWED_ORIGINS: "http://localhost:5173,http://localhost:3000"
+    volumes:
+      - ./train.csv:/app/train.csv:ro
     ports:
       - "8000:8000"
 

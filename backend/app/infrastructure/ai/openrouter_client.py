@@ -29,16 +29,29 @@ TABLE: drivers
 
 TABLE: trips
   - id (int, PK)
-  - driver_id (int, FK → drivers.id)
-  - city_id (int, FK → cities.id)
-  - status (enum: 'pending','in_progress','completed','cancelled')
-  - distance_km (float)
-  - duration_min (int)
-  - revenue (float) — trip revenue in rubles
-  - passenger_rating (float, nullable)
-  - started_at (timestamp)
-  - ended_at (timestamp, nullable)
-  - cancel_reason (varchar, nullable)
+  - city_id (int)
+  - order_id (varchar, anonymized order ID)
+  - tender_id (varchar, nullable)
+  - user_id (varchar, anonymized user ID)
+  - driver_id (varchar, nullable, anonymized driver ID)
+  - offset_hours (int) — city local offset from UTC
+  - status_order (varchar) — final order status: done/cancel/delete/accept
+  - status_tender (varchar, nullable) — tender status
+  - order_timestamp (timestamp)
+  - tender_timestamp (timestamp, nullable)
+  - driveraccept_timestamp (timestamp, nullable)
+  - driverarrived_timestamp (timestamp, nullable)
+  - driverstarttheride_timestamp (timestamp, nullable)
+  - driverdone_timestamp (timestamp, nullable)
+  - clientcancel_timestamp (timestamp, nullable)
+  - drivercancel_timestamp (timestamp, nullable)
+  - order_modified_local (timestamp, nullable)
+  - cancel_before_accept_local (timestamp, nullable)
+  - distance_in_meters (float)
+  - duration_in_seconds (int)
+  - price_order_local (float) — final order price in local currency
+  - price_tender_local (float, nullable)
+  - price_start_local (float)
 
 TABLE: orders
   - id (int, PK)
@@ -90,17 +103,17 @@ TABLE: semantic_terms
 """
 
 SEMANTIC_LAYER = {
-    "выручка": "SUM(trips.revenue)",
-    "доход": "SUM(trips.revenue)",
-    "revenue": "SUM(trips.revenue)",
-    "поездки": "COUNT(trips.id)",
-    "trips": "COUNT(trips.id)",
-    "отмены": "COUNT(trips.id) FILTER (WHERE trips.status = 'cancelled')",
-    "cancelled": "COUNT(trips.id) FILTER (WHERE trips.status = 'cancelled')",
-    "отменённые заказы": "COUNT(orders.id) FILTER (WHERE orders.status = 'cancelled')",
-    "водители": "COUNT(DISTINCT drivers.id)",
-    "активные водители": "COUNT(DISTINCT drivers.id) FILTER (WHERE drivers.is_active = true)",
-    "рейтинг": "AVG(drivers.rating)",
+    "выручка": "SUM(trips.price_order_local)",
+    "доход": "SUM(trips.price_order_local)",
+    "revenue": "SUM(trips.price_order_local)",
+    "поездки": "COUNT(DISTINCT trips.order_id)",
+    "trips": "COUNT(DISTINCT trips.order_id)",
+    "отмены": "COUNT(*) FILTER (WHERE trips.status_order = 'cancel')",
+    "cancelled": "COUNT(*) FILTER (WHERE trips.status_order = 'cancel')",
+    "средний чек": "AVG(trips.price_order_local)",
+    "длительность": "AVG(trips.duration_in_seconds)",
+    "расстояние": "AVG(trips.distance_in_meters)",
+    "водители": "COUNT(DISTINCT trips.driver_id)",
     "питер": "Санкт-Петербург",
     "спб": "Санкт-Петербург",
     "мск": "Москва",
@@ -121,11 +134,11 @@ def build_system_prompt() -> str:
 2. Никогда не выбирай чувствительные колонки: password, token, secret.
 3. Всегда добавляй LIMIT 1000, если это не агрегирующий запрос.
 4. Используй семантический слой, когда пользователь упоминает бизнес-термины.
-5. Всегда используй корректные JOIN по FK-связям.
+5. Для анализа поездок в первую очередь используй таблицу trips.
 6. Для фильтров по времени используй NOW(), CURRENT_DATE, INTERVAL.
-7. "прошлая неделя" = WHERE started_at >= NOW() - INTERVAL '14 days' AND started_at < NOW() - INTERVAL '7 days'
-8. "эта неделя" = WHERE started_at >= NOW() - INTERVAL '7 days'
-9. "вчера" = WHERE DATE(started_at) = CURRENT_DATE - 1
+7. "прошлая неделя" = WHERE order_timestamp >= NOW() - INTERVAL '14 days' AND order_timestamp < NOW() - INTERVAL '7 days'
+8. "эта неделя" = WHERE order_timestamp >= NOW() - INTERVAL '7 days'
+9. "вчера" = WHERE DATE(order_timestamp) = CURRENT_DATE - 1
 
 ОТВЕЧАЙ СТРОГО В ТАКОМ JSON-ФОРМАТЕ:
 {{

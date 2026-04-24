@@ -28,6 +28,11 @@ const router = createRouter({
       name: 'semantic',
       component: () => import('@/views/SemanticView.vue'),
     },
+    {
+      path: '/schema',
+      name: 'schema',
+      component: () => import('@/views/SchemaView.vue'),
+    },
   ],
 })
 
